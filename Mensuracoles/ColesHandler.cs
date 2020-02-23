@@ -79,11 +79,23 @@ namespace Mensuracoles
         }
         private string SanitizeQueryFromBotTrigger(string rawQuery)
         {
+            List<string> botCommandsAdd = new List<string>()
+            {
+                "@mensuracolesbot",
+                "счетобот",
+                "countbot",
+                "count",
+                "add",
+                "show"
+            };
+            
+
             string query = rawQuery;
-            foreach (var command in _botCommands)
+            foreach (var command in botCommandsAdd)
             {
                 query.Replace(command, "");
             }
+             
             return query;
         }
 
