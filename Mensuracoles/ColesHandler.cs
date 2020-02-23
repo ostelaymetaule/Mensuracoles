@@ -49,8 +49,7 @@ namespace Mensuracoles
                 "счетобот",
                 "countbot",
                 "count",
-                "add",
-                "show"
+                "add"
             };
             List<string> botCommandsShow = new List<string>()
             {
@@ -93,7 +92,7 @@ namespace Mensuracoles
             string query = rawQuery;
             foreach (var command in botCommandsAdd)
             {
-                query.Replace(command, "");
+                query = query.Replace(command, "");
             }
              
             return query;
