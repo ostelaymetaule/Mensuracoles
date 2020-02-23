@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Args;
 using Telegram.Bot.Types;
@@ -68,20 +69,19 @@ namespace Mensuracoles
 
         private BotCommand ShouldReactToCommand(string query)
         {
-
             query = query.ToLowerInvariant();
 
-            if (_botCommandsAdd.Any(x => query.StartsWith(x)))
-            {
-                return BotCommand.Add;
-            }
-            else if (_botCommandsShow.Any(x => query.StartsWith(x)))
+            if (_botCommandsShow.Any(x => query.StartsWith(x)))
             {
                 return BotCommand.Show;
             }
             else if (_botCommandsDelete.Any(x => query.StartsWith(x)))
             {
                 return BotCommand.Delete;
+            }
+            else if (_botCommandsAdd.Any(x => query.StartsWith(x)))
+            {
+                return BotCommand.Add;
             }
             else
             {
@@ -106,38 +106,42 @@ namespace Mensuracoles
 
             try
             {
-                var splittedQuery = query.Split(" ");
-                if (!splittedQuery.Any())
+                if (!String.IsNullOrWhiteSpace(query))
                 {
-                    return ret;
-                }
-                var splittedSanitized = splittedQuery.Where(x => !String.IsNullOrEmpty(x));
-                if (!splittedSanitized.Any())
-                {
-                    return ret;
-                }
-                if (splittedSanitized.Count() == 1)
-                {
-                    ret.Bin = splittedSanitized.FirstOrDefault();
-                }
 
-                if (splittedSanitized.Count() >= 2)
-                {
-                    ret.Bin = String.Join(" ", splittedSanitized.Take(splittedSanitized.Count() - 1));
-                }
+                    var splittedQuery = query.Split(" ");
+                    if (!splittedQuery.Any())
+                    {
+                        return ret;
+                    }
+                    var splittedSanitized = splittedQuery.Where(x => !String.IsNullOrEmpty(x));
+                    if (!splittedSanitized.Any())
+                    {
+                        return ret;
+                    }
+                    if (splittedSanitized.Count() == 1)
+                    {
+                        ret.Bin = splittedSanitized.FirstOrDefault();
+                    }
 
-                var lastValue = splittedSanitized.LastOrDefault();
-                lastValue = lastValue.Replace(",", ".");
-                decimal value = 0;
+                    if (splittedSanitized.Count() >= 2)
+                    {
+                        ret.Bin = String.Join(" ", splittedSanitized.Take(splittedSanitized.Count() - 1));
+                    }
 
-                if (decimal.TryParse(lastValue, out value))
-                {
-                    ret.Value = value;
-                }
-                else
-                {
-                    ret.Bin = query;
-                    ret.Value = 0;
+                    var lastValue = splittedSanitized.LastOrDefault();
+                    lastValue = lastValue.Replace(",", ".");
+                    decimal value = 0;
+
+                    if (decimal.TryParse(lastValue, out value))
+                    {
+                        ret.Value = value;
+                    }
+                    else
+                    {
+                        ret.Bin = query;
+                        ret.Value = 0;
+                    }
                 }
 
             }
@@ -253,7 +257,17 @@ namespace Mensuracoles
                 }
                 else if (ShouldReactToCommand(query) == BotCommand.Delete)
                 {
-                    DisplayAllResultsAsync(e.Message.Chat).GetAwaiter().GetResult();
+                    query = SanitizeQueryFromBotTrigger(query, _botCommandsDelete);
+                    var parsedQuery = ParseQuery(query);
+
+
+                    AskButtonWithCallBack(
+                        e.Message.Chat.Id,
+                        parsedQuery.Bin,
+                        $"Are you sure you want to delete the counter named '{parsedQuery.Bin}' and all of the saved scores?",
+                        new List<string>() { "YES", "nope" }
+                        );
+
 
                 }
                 else if (ShouldReactToCommand(query) == BotCommand.Add)
@@ -280,9 +294,42 @@ namespace Mensuracoles
             }
 
         }
-        private void BotClient_OnCallbackQueryAsync(object sender, CallbackQueryEventArgs e)
+
+        private void RemoveCounter(long chatId, string binName)
         {
-            // throw new NotImplementedException();
+            var messages = _repository.GetMessages();
+
+            var cleansedMessages = messages
+                .Where(x => x.ChatId != chatId || x.BinName != binName).ToList();
+            _repository.SaveMessagesToFile(cleansedMessages, true);
         }
+        private async void AskButtonWithCallBack(long chatId, string binName, string qustionText, List<string> options)
+        {
+            var keyboard = new InlineKeyboardMarkup(options.Select(x => new[] { new InlineKeyboardButton() { Text = x, CallbackData = $"{x}:{binName}" } }).ToArray());
+
+            await _botClient.SendTextMessageAsync(chatId, qustionText,
+                replyMarkup: keyboard);
+        }
+
+        private async void BotClient_OnCallbackQueryAsync(object sender, CallbackQueryEventArgs e)
+        {
+            var messageText = e.CallbackQuery.Message.Text;
+            var replyData = e.CallbackQuery.Data;
+            var chat = e.CallbackQuery.Message.Chat;
+            if (messageText != null && replyData != null && replyData.Contains(":"))
+            {
+                //replyData is in the format chatId:binName
+                string buttonName = replyData.Split(":").FirstOrDefault();
+
+                if (buttonName!=null && buttonName=="YES")
+                {
+                    string binName = replyData.Substring(replyData.IndexOf(":")).TrimStart(':');
+
+                    RemoveCounter(chat.Id, binName);
+                }
+
+            }
+        }
+
     }
 }

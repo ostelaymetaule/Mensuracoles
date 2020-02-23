@@ -43,14 +43,27 @@ namespace Mensuracoles.Repository
             return File.ReadAllText(_fileName);
         }
 
-        public void SaveMessagesToFile(List<UserMeasurement> messages)
+        public void SaveMessagesToFile(List<UserMeasurement> messages, bool replace = false)
         {
-            messages.ForEach(x => InMemory.TryAdd(x.MessageId, x));
+            try
+            {
+                if (replace)
+                {
+                    var replaceInMemory = new Dictionary<int, UserMeasurement>();
+                    InMemory = replaceInMemory;
+                }
+                messages.ForEach(x => InMemory.TryAdd(x.MessageId, x));
 
-            var formatting = Newtonsoft.Json.Formatting.Indented;
-            var seriaizedTable = Newtonsoft.Json.JsonConvert.SerializeObject(GetMessages(), formatting);
-            CreateFileIfNotExist(_fileName);
-            File.WriteAllText(_fileName, seriaizedTable);
+                var formatting = Newtonsoft.Json.Formatting.Indented;
+                var seriaizedTable = Newtonsoft.Json.JsonConvert.SerializeObject(GetMessages(), formatting);
+                CreateFileIfNotExist(_fileName);
+                File.WriteAllText(_fileName, seriaizedTable);
+                
+            }
+            catch (Exception e)
+            {
+                System.Console.WriteLine(e);
+            }
         }
 
         public List<UserMeasurement> GetMessages()
