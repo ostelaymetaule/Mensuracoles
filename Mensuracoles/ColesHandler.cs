@@ -306,6 +306,14 @@ namespace Mensuracoles
 
             var cleansedMessages = messages
                 .Where(x => x.ChatId != chatId || x.BinName != binName).ToList();
+
+            if (String.IsNullOrWhiteSpace(binName))
+            {
+                cleansedMessages = messages
+                .Where(x => x.ChatId != chatId || x.BinName != null || x.BinName != binName).ToList();
+            }
+
+
             _repository.SaveMessagesToFile(cleansedMessages, true);
         }
         private async void AskButtonWithCallBack(long chatId, string binName, string qustionText, List<string> options)
@@ -326,7 +334,7 @@ namespace Mensuracoles
                 //replyData is in the format chatId:binName
                 string buttonName = replyData.Split(":").FirstOrDefault();
 
-                if (buttonName!=null && buttonName=="YES")
+                if (buttonName != null && buttonName == "YES")
                 {
                     string binName = replyData.Substring(replyData.IndexOf(":")).TrimStart(':');
                     var origMessage = e.CallbackQuery.InlineMessageId;
@@ -335,7 +343,7 @@ namespace Mensuracoles
 
                     await _botClient.DeleteMessageAsync(chat, e.CallbackQuery.Message.MessageId);
                     DisplayAllResultsAsync(e.CallbackQuery.Message.Chat).GetAwaiter().GetResult();
-                    
+
                 }
 
             }
