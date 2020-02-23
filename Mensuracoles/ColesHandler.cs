@@ -16,7 +16,8 @@ namespace Mensuracoles
     {
         None,
         Show,
-        Add
+        Add,
+        Delete
     }
     public class ColesHandler
     {
@@ -60,6 +61,14 @@ namespace Mensuracoles
                 "count show",
                 "show"
             };
+            List<string> botCommandsRemove = new List<string>()
+            {
+                "@mensuracolesbot delete",
+                "счетобот удали",
+                "countbot delete",
+                "count delete",
+                "delete"
+            };
             query = query.ToLowerInvariant();
 
             if (botCommandsAdd.Any(x => query.StartsWith(x)))
@@ -70,6 +79,10 @@ namespace Mensuracoles
             {
                 return BotCommand.Show;
             }
+            else if (botCommandsRemove.Any(x => query.StartsWith(x)))
+            {
+                return BotCommand.Delete;
+            }
             else
             {
                 return BotCommand.None;
@@ -78,6 +91,7 @@ namespace Mensuracoles
         }
         private string SanitizeQueryFromBotTrigger(string rawQuery)
         {
+
             List<string> botCommandsAdd = new List<string>()
             {
                 "@mensuracolesbot",
@@ -87,14 +101,14 @@ namespace Mensuracoles
                 "add",
                 "show"
             };
-            
+
 
             string query = rawQuery;
             foreach (var command in botCommandsAdd)
             {
                 query = query.Replace(command, "");
             }
-             
+
             return query;
         }
 
@@ -242,20 +256,28 @@ namespace Mensuracoles
                 ChatId = chatId
             };
 
-
-            if (ShouldReactToCommand(query) == BotCommand.Add)
+            if (query != null)
             {
-                var measures = _repository.GetMessages();
-                measures.Add(userMeasurement);
-                _repository.SaveMessagesToFile(measures);
+                if (ShouldReactToCommand(query) == BotCommand.Add)
+                {
+                    var measures = _repository.GetMessages();
+                    measures.Add(userMeasurement);
+                    _repository.SaveMessagesToFile(measures);
 
-                DisplayResultsAsync(e.Message.Chat, parsedQuery.Bin).GetAwaiter().GetResult();
-            }
-            else if (ShouldReactToCommand(query) == BotCommand.Show)
-            {
-                DisplayAllResultsAsync(e.Message.Chat).GetAwaiter().GetResult();
+                    DisplayResultsAsync(e.Message.Chat, parsedQuery.Bin).GetAwaiter().GetResult();
+                }
+                else if (ShouldReactToCommand(query) == BotCommand.Show)
+                {
+                    DisplayAllResultsAsync(e.Message.Chat).GetAwaiter().GetResult();
 
+                }
+                else if (ShouldReactToCommand(query) == BotCommand.Delete)
+                {
+                    DisplayAllResultsAsync(e.Message.Chat).GetAwaiter().GetResult();
+
+                }
             }
+
         }
         private void BotClient_OnCallbackQueryAsync(object sender, CallbackQueryEventArgs e)
         {
