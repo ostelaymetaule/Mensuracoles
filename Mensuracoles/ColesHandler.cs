@@ -23,7 +23,31 @@ namespace Mensuracoles
     {
         private ITelegramBotClient _botClient;
         private FileRepository _repository;
-
+        private List<string> _botCommandsAdd = new List<string>()
+            {
+                "@mensuracolesbot",
+                "счетобот",
+                "countbot",
+                "count",
+                "add"
+            };
+        private List<string> _botCommandsShow = new List<string>()
+            {
+                "@mensuracolesbot show",
+                "счетобот статы",
+                "счетобот покажи",
+                "countbot show",
+                "count show",
+                "show"
+            };
+        private List<string> _botCommandsDelete = new List<string>()
+            {
+                "@mensuracolesbot delete",
+                "счетобот удали",
+                "countbot delete",
+                "count delete",
+                "delete"
+            };
         public ColesHandler(string token, FileRepository repository)
         {
             _repository = repository;
@@ -44,42 +68,18 @@ namespace Mensuracoles
 
         private BotCommand ShouldReactToCommand(string query)
         {
-            List<string> botCommandsAdd = new List<string>()
-            {
-                "@mensuracolesbot",
-                "счетобот",
-                "countbot",
-                "count",
-                "add"
-            };
-            List<string> botCommandsShow = new List<string>()
-            {
-                "@mensuracolesbot show",
-                "счетобот статы",
-                "счетобот покажи",
-                "countbot show",
-                "count show",
-                "show"
-            };
-            List<string> botCommandsRemove = new List<string>()
-            {
-                "@mensuracolesbot delete",
-                "счетобот удали",
-                "countbot delete",
-                "count delete",
-                "delete"
-            };
+
             query = query.ToLowerInvariant();
 
-            if (botCommandsAdd.Any(x => query.StartsWith(x)))
+            if (_botCommandsAdd.Any(x => query.StartsWith(x)))
             {
                 return BotCommand.Add;
             }
-            else if (botCommandsShow.Any(x => query.StartsWith(x)))
+            else if (_botCommandsShow.Any(x => query.StartsWith(x)))
             {
                 return BotCommand.Show;
             }
-            else if (botCommandsRemove.Any(x => query.StartsWith(x)))
+            else if (_botCommandsDelete.Any(x => query.StartsWith(x)))
             {
                 return BotCommand.Delete;
             }
@@ -89,27 +89,15 @@ namespace Mensuracoles
 
             }
         }
-        private string SanitizeQueryFromBotTrigger(string rawQuery)
+        private string SanitizeQueryFromBotTrigger(string rawQuery, List<string> queryPrefix)
         {
-
-            List<string> botCommandsAdd = new List<string>()
-            {
-                "@mensuracolesbot",
-                "счетобот",
-                "countbot",
-                "count",
-                "add",
-                "show"
-            };
-
-
-            string query = rawQuery;
-            foreach (var command in botCommandsAdd)
+            string query = rawQuery.ToLowerInvariant();
+            foreach (var command in queryPrefix)
             {
                 query = query.Replace(command, "");
             }
 
-            return query;
+            return query.Trim();
         }
 
         private ParsedQuery ParseQuery(string query)
@@ -118,40 +106,40 @@ namespace Mensuracoles
 
             try
             {
-                query = query.ToLowerInvariant();
-
-                if (ShouldReactToCommand(query) == BotCommand.Add)
+                var splittedQuery = query.Split(" ");
+                if (!splittedQuery.Any())
                 {
-                    query = SanitizeQueryFromBotTrigger(query);
-
-                    var splittedQuery = query.Split(" ");
-                    if (!splittedQuery.Any())
-                    {
-                        return ret;
-                    }
-                    var splittedSanitized = splittedQuery.Where(x => !String.IsNullOrEmpty(x));
-                    if (!splittedSanitized.Any())
-                    {
-                        return ret;
-                    }
-                    if (splittedSanitized.Count() == 1)
-                    {
-                        ret.Bin = "";
-                    }
-
-                    if (splittedSanitized.Count() >= 2)
-                    {
-                        ret.Bin = String.Join(" ", splittedSanitized.Take(splittedSanitized.Count() - 1));
-                    }
-
-                    var lastValue = splittedSanitized.LastOrDefault();
-                    decimal value = 0;
-
-                    if (decimal.TryParse(lastValue, out value))
-                    {
-                        ret.Value = value;
-                    }
+                    return ret;
                 }
+                var splittedSanitized = splittedQuery.Where(x => !String.IsNullOrEmpty(x));
+                if (!splittedSanitized.Any())
+                {
+                    return ret;
+                }
+                if (splittedSanitized.Count() == 1)
+                {
+                    ret.Bin = splittedSanitized.FirstOrDefault();
+                }
+
+                if (splittedSanitized.Count() >= 2)
+                {
+                    ret.Bin = String.Join(" ", splittedSanitized.Take(splittedSanitized.Count() - 1));
+                }
+
+                var lastValue = splittedSanitized.LastOrDefault();
+                lastValue = lastValue.Replace(",", ".");
+                decimal value = 0;
+
+                if (decimal.TryParse(lastValue, out value))
+                {
+                    ret.Value = value;
+                }
+                else
+                {
+                    ret.Bin = query;
+                    ret.Value = 0;
+                }
+
             }
             catch (Exception e)
             {
@@ -243,38 +231,51 @@ namespace Mensuracoles
             var query = e.Message.Text;
             var messageId = e.Message.MessageId;
             var chatId = e.Message.Chat.Id;
-            var parsedQuery = ParseQuery(query);
 
-            var userMeasurement = new UserMeasurement()
-            {
-                BinName = parsedQuery.Bin,
-                DataPointTimestamp = DateTime.Now,
-                MessageId = messageId,
-                Data = parsedQuery.Value,
-                UserName = usersent,
-                UserId = userIdsent,
-                ChatId = chatId
-            };
 
             if (query != null)
             {
-                if (ShouldReactToCommand(query) == BotCommand.Add)
-                {
-                    var measures = _repository.GetMessages();
-                    measures.Add(userMeasurement);
-                    _repository.SaveMessagesToFile(measures);
 
-                    DisplayResultsAsync(e.Message.Chat, parsedQuery.Bin).GetAwaiter().GetResult();
-                }
-                else if (ShouldReactToCommand(query) == BotCommand.Show)
+
+                if (ShouldReactToCommand(query) == BotCommand.Show)
                 {
-                    DisplayAllResultsAsync(e.Message.Chat).GetAwaiter().GetResult();
+                    query = SanitizeQueryFromBotTrigger(query, _botCommandsShow);
+                    var parsedQuery = ParseQuery(query);
+                    if (String.IsNullOrWhiteSpace(parsedQuery.Bin))
+                    {
+                        DisplayAllResultsAsync(e.Message.Chat).GetAwaiter().GetResult();
+                    }
+                    else
+                    {
+                        DisplayResultsAsync(e.Message.Chat, parsedQuery.Bin).GetAwaiter().GetResult();
+                    }
 
                 }
                 else if (ShouldReactToCommand(query) == BotCommand.Delete)
                 {
                     DisplayAllResultsAsync(e.Message.Chat).GetAwaiter().GetResult();
 
+                }
+                else if (ShouldReactToCommand(query) == BotCommand.Add)
+                {
+                    query = SanitizeQueryFromBotTrigger(query, _botCommandsAdd);
+                    var parsedQuery = ParseQuery(query);
+                    var userMeasurement = new UserMeasurement()
+                    {
+                        BinName = parsedQuery.Bin,
+                        DataPointTimestamp = DateTime.Now,
+                        MessageId = messageId,
+                        Data = parsedQuery.Value,
+                        UserName = usersent,
+                        UserId = userIdsent,
+                        ChatId = chatId
+                    };
+
+                    var measures = _repository.GetMessages();
+                    measures.Add(userMeasurement);
+                    _repository.SaveMessagesToFile(measures);
+
+                    DisplayResultsAsync(e.Message.Chat, parsedQuery.Bin).GetAwaiter().GetResult();
                 }
             }
 
