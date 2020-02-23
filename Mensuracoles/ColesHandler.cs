@@ -309,10 +309,8 @@ namespace Mensuracoles
 
             if (String.IsNullOrWhiteSpace(binName))
             {
-                cleansedMessages = messages
-                .Where(x => x.ChatId != chatId || x.BinName != null || x.BinName != binName).ToList();
+                cleansedMessages = messages.Except(messages.Where(x => x.ChatId == chatId && (x.BinName == null || x.BinName == binName)).ToList()).ToList();
             }
-
 
             _repository.SaveMessagesToFile(cleansedMessages, true);
         }
