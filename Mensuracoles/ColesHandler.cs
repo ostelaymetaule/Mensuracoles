@@ -92,9 +92,14 @@ namespace Mensuracoles
         private string SanitizeQueryFromBotTrigger(string rawQuery, List<string> queryPrefix)
         {
             string query = rawQuery.ToLowerInvariant();
+            query = query.Trim();
+
             foreach (var command in queryPrefix)
             {
-                query = query.Replace(command, "");
+                if (query.StartsWith(command))
+                {
+                    query = query.Substring(command.Length);
+                }
             }
 
             return query.Trim();
@@ -324,8 +329,13 @@ namespace Mensuracoles
                 if (buttonName!=null && buttonName=="YES")
                 {
                     string binName = replyData.Substring(replyData.IndexOf(":")).TrimStart(':');
+                    var origMessage = e.CallbackQuery.InlineMessageId;
 
                     RemoveCounter(chat.Id, binName);
+
+                    await _botClient.DeleteMessageAsync(chat, e.CallbackQuery.Message.MessageId);
+                    DisplayAllResultsAsync(e.CallbackQuery.Message.Chat).GetAwaiter().GetResult();
+                    
                 }
 
             }
