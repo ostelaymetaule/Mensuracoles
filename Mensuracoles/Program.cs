@@ -23,7 +23,7 @@ namespace Mensuracoles
             {
                 Directory.CreateDirectory(Path.Combine(basepath, "measurments"));
             }
-
+            System.Console.WriteLine("Saving messages to " + messagesFilePath);
             var repository = new FileRepository(messagesFilePath);
 
             var myBotListner = new ColesHandler(token, repository);

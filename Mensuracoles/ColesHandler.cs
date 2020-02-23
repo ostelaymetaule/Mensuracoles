@@ -12,10 +12,17 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace Mensuracoles
 {
+    public enum BotCommand
+    {
+        None,
+        Show,
+        Add
+    }
     public class ColesHandler
     {
         private ITelegramBotClient _botClient;
         private FileRepository _repository;
+
         public ColesHandler(string token, FileRepository repository)
         {
             _repository = repository;
@@ -34,6 +41,52 @@ namespace Mensuracoles
             }
         }
 
+        private BotCommand ShouldReactToCommand(string query)
+        {
+            List<string> botCommandsAdd = new List<string>()
+            {
+                "@mensuracolesbot",
+                "счетобот",
+                "countbot",
+                "count",
+                "add",
+                "show"
+            };
+            List<string> botCommandsShow = new List<string>()
+            {
+                "@mensuracolesbot show",
+                "счетобот статы",
+                "счетобот покажи",
+                "countbot show",
+                "count show",
+                "show"
+            };
+            query = query.ToLowerInvariant();
+
+            if (botCommandsAdd.Any(x => query.StartsWith(x)))
+            {
+                return BotCommand.Add;
+            }
+            else if (botCommandsShow.Any(x => query.StartsWith(x)))
+            {
+                return BotCommand.Show;
+            }
+            else
+            {
+                return BotCommand.None;
+
+            }
+        }
+        private string SanitizeQueryFromBotTrigger(string rawQuery)
+        {
+            string query = rawQuery;
+            foreach (var command in _botCommands)
+            {
+                query.Replace(command, "");
+            }
+            return query;
+        }
+
         private ParsedQuery ParseQuery(string query)
         {
             var ret = new ParsedQuery();
@@ -42,15 +95,9 @@ namespace Mensuracoles
             {
                 query = query.ToLowerInvariant();
 
-                if (query.Contains("@mensuracolesbot") || query.Contains("счетобот") || query.Contains("countbot") || query.Contains("count") || query.Contains("add"))
+                if (ShouldReactToCommand(query) == BotCommand.Add)
                 {
-                    query = query.Replace("@mensuracolesbot", "");
-                    query = query.Replace("счетобот", "");
-                    query = query.Replace("countbot", "");
-                    query = query.Replace("count", "");
-                    query = query.Replace("add", "");
-
-
+                    query = SanitizeQueryFromBotTrigger(query);
 
                     var splittedQuery = query.Split(" ");
                     if (!splittedQuery.Any())
@@ -117,6 +164,46 @@ namespace Mensuracoles
 
         }
 
+        private async System.Threading.Tasks.Task DisplayAllResultsAsync(Chat chatId)
+        {
+
+            var messages = _repository.GetMessages();
+
+            var groupedMessages = messages
+                .Where(x => x.ChatId == chatId.Id)
+                .GroupBy(x => new { x.BinName, x.UserId });
+            var listedSum = groupedMessages.Select(x => new { x.OrderByDescending(k => k.DataPointTimestamp).LastOrDefault()?.UserName, x.Key.BinName, SumDistance = x.Sum(k => k.Data) })
+                .OrderBy(x => x.BinName)
+                .ThenBy(x => x.SumDistance)
+                .ToList();
+            var text = " ";
+            var groupedListedSum = listedSum.GroupBy(x => x.BinName);
+            foreach (var bin in groupedListedSum)
+            {
+                text += "__<code>" + bin.Key + "</code>__" + Environment.NewLine;
+                foreach (var item in bin)
+                {
+                    text += "<b>" + item.UserName + "</b>: \t\t" + item.SumDistance + Environment.NewLine;
+                }
+                text += Environment.NewLine;
+                text += Environment.NewLine;
+
+            }
+
+            text += "";
+            if (!String.IsNullOrWhiteSpace(text))
+            {
+                await _botClient.SendTextMessageAsync(
+                      chatId: chatId,
+                      text: text,
+                      parseMode: ParseMode.Html,
+                      disableWebPagePreview: false
+                      );
+            }
+
+        }
+
+
         private void Bot_OnMessage(object sender, MessageEventArgs e)
         {
             var userFrom = e.Message.From;
@@ -145,13 +232,18 @@ namespace Mensuracoles
             };
 
 
-            if (parsedQuery.Value != 0)
+            if (ShouldReactToCommand(query) == BotCommand.Add)
             {
                 var measures = _repository.GetMessages();
                 measures.Add(userMeasurement);
                 _repository.SaveMessagesToFile(measures);
 
                 DisplayResultsAsync(e.Message.Chat, parsedQuery.Bin).GetAwaiter().GetResult();
+            }
+            else if (ShouldReactToCommand(query) == BotCommand.Show)
+            {
+                DisplayAllResultsAsync(e.Message.Chat).GetAwaiter().GetResult();
+
             }
         }
         private void BotClient_OnCallbackQueryAsync(object sender, CallbackQueryEventArgs e)
